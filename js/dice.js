@@ -9,29 +9,12 @@ const CANVAS_CENTER = CANVAS_SIZE / 2;
 const SCALE_THRESHOLD = 0.001;
 
 const FACE_COLORS = [
-  new THREE.Color(0xff6b6b), // red
-  new THREE.Color(0x667eea), // indigo
-  new THREE.Color(0xfeca57), // yellow
-  new THREE.Color(0x11998e), // teal
-  new THREE.Color(0xff9ff3), // pink
-  new THREE.Color(0xf7971e), // orange
-  new THREE.Color(0x56ccf2), // sky blue
-  new THREE.Color(0xa8e063), // lime
-  new THREE.Color(0x764ba2), // purple
-  new THREE.Color(0x00b4db), // cyan
-  new THREE.Color(0xe94560), // crimson
-  new THREE.Color(0x1dd1a1), // mint
-  new THREE.Color(0xfc5c7d), // rose
-  new THREE.Color(0x6a3093), // deep purple
-  new THREE.Color(0xf0932b), // tangerine
-  new THREE.Color(0x48dbfb), // light blue
-  new THREE.Color(0xc7ecee), // ice
-  new THREE.Color(0xdfe6e9), // silver
-  new THREE.Color(0xfdcb6e), // gold
-  new THREE.Color(0x00cec9), // aqua
+  '#ff6b6b', '#667eea', '#feca57', '#11998e', '#ff9ff3',
+  '#f7971e', '#56ccf2', '#a8e063', '#764ba2', '#00b4db',
+  '#e94560', '#1dd1a1', '#fc5c7d', '#6a3093', '#f0932b',
+  '#48dbfb', '#c7ecee', '#b8e994', '#fdcb6e', '#00cec9',
 ];
 
-// Numbers to display on each face (decorative d20-style)
 const FACE_NUMBERS = [
   10, 15, 20, 25, 30, 35, 40, 45, 50, 55,
   60, 12, 18, 22, 28, 33, 38, 42, 48, 53,
@@ -45,23 +28,12 @@ export class Dice {
     this.basePosition = position.clone();
 
     const geometry = new THREE.IcosahedronGeometry(DICE_RADIUS, 0);
-    this._applyFaceColors(geometry);
+    this._setupFaceGroups(geometry);
+    this.materials = this._createFaceMaterials(geometry);
 
-    this.material = new THREE.MeshPhysicalMaterial({
-      vertexColors: true,
-      metalness: 0.1,
-      roughness: 0.4,
-      emissive: 0x000000,
-      emissiveIntensity: 0,
-    });
-
-    this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh = new THREE.Mesh(geometry, this.materials);
     this.mesh.position.copy(position);
     this.scene.add(this.mesh);
-
-    // Face number labels
-    this._faceLabels = [];
-    this._createFaceLabels(geometry);
 
     this.angularVelocity = new THREE.Vector3();
     this.rollDuration = 0;
@@ -106,7 +78,6 @@ export class Dice {
     this.bounceSpeed = 4 + Math.random() * 2;
     this.targetScale = 0.85;
 
-    this._setFaceLabelsVisible(false);
     this._createRollingSprite();
 
     return new Promise((resolve) => {
@@ -157,7 +128,6 @@ export class Dice {
       }
     }
 
-    // Scale pulse during roll for visual feedback
     const wobble = 1 + Math.sin(this.rollElapsed * 12) * 0.03 * easeFactor;
     this.mesh.scale.setScalar(this.currentScale * wobble);
 
@@ -171,21 +141,90 @@ export class Dice {
 
     this._renderNumber(number, 1.0, 120, 20);
     const texture = new THREE.CanvasTexture(this._canvas);
-    this.resultSprite = this._createSprite(texture, 3.2);
+    this.resultSprite = this._createResultSprite(texture, 3.2);
   }
 
   dispose() {
     this._clearResult();
     this._clearRollingSprite();
-    this._disposeFaceLabels();
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
-    this.material.dispose();
+    this.materials.forEach(m => {
+      if (m.map) m.map.dispose();
+      m.dispose();
+    });
     this._canvas = null;
     this._ctx = null;
   }
 
-  // --- Private helpers ---
+  // --- Private: geometry setup ---
+
+  _setupFaceGroups(geometry) {
+    geometry.clearGroups();
+    const faceCount = geometry.getAttribute('position').count / 3;
+
+    // Assign each face to its own material group
+    for (let i = 0; i < faceCount; i++) {
+      geometry.addGroup(i * 3, 3, i);
+    }
+
+    // Remap UVs so each face covers full [0,1] texture range
+    const uvs = new Float32Array(faceCount * 3 * 2);
+    for (let i = 0; i < faceCount; i++) {
+      const base = i * 6;
+      // Triangle UV: top-center, bottom-left, bottom-right
+      uvs[base] = 0.5; uvs[base + 1] = 1.0;
+      uvs[base + 2] = 0.0; uvs[base + 3] = 0.0;
+      uvs[base + 4] = 1.0; uvs[base + 5] = 0.0;
+    }
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  }
+
+  _createFaceMaterials(geometry) {
+    const faceCount = geometry.getAttribute('position').count / 3;
+    const materials = [];
+
+    for (let i = 0; i < faceCount; i++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // Fill with face color
+      ctx.fillStyle = FACE_COLORS[i % FACE_COLORS.length];
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Subtle edge shading for depth
+      const grad = ctx.createRadialGradient(128, 100, 20, 128, 128, 140);
+      grad.addColorStop(0, 'rgba(255,255,255,0.15)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.15)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // White number centered in the triangle area
+      const num = FACE_NUMBERS[i % FACE_NUMBERS.length];
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 100px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(String(num), 128, 120);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+
+      materials.push(new THREE.MeshPhysicalMaterial({
+        map: texture,
+        metalness: 0.05,
+        roughness: 0.5,
+      }));
+    }
+
+    return materials;
+  }
+
+  // --- Private: animation helpers ---
 
   _randomResult() {
     return Math.floor(Math.random() * DICE_RANGE) + DICE_MIN;
@@ -203,7 +242,7 @@ export class Dice {
     ctx.fillText(String(number), CANVAS_CENTER, CANVAS_CENTER);
   }
 
-  _createSprite(texture, scale) {
+  _createResultSprite(texture, scale) {
     const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(scale, scale, 1);
@@ -213,85 +252,15 @@ export class Dice {
     return sprite;
   }
 
-  _applyFaceColors(geometry) {
-    const count = geometry.getAttribute('position').count;
-    const colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i += 3) {
-      const color = FACE_COLORS[Math.floor(i / 3) % FACE_COLORS.length];
-      for (let v = 0; v < 3; v++) {
-        colors[(i + v) * 3] = color.r;
-        colors[(i + v) * 3 + 1] = color.g;
-        colors[(i + v) * 3 + 2] = color.b;
-      }
-    }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  }
-
-  _createFaceLabels(geometry) {
-    const positions = geometry.getAttribute('position');
-    const faceCount = positions.count / 3;
-
-    for (let i = 0; i < faceCount; i++) {
-      const i0 = i * 3, i1 = i * 3 + 1, i2 = i * 3 + 2;
-      const cx = (positions.getX(i0) + positions.getX(i1) + positions.getX(i2)) / 3;
-      const cy = (positions.getY(i0) + positions.getY(i1) + positions.getY(i2)) / 3;
-      const cz = (positions.getZ(i0) + positions.getZ(i1) + positions.getZ(i2)) / 3;
-
-      const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
-      const offset = 1.02;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = 128;
-      canvas.height = 128;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 64px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-      ctx.shadowBlur = 3;
-      ctx.fillText(String(FACE_NUMBERS[i % FACE_NUMBERS.length]), 64, 64);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      const mat = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-      plane.position.set(
-        (cx / len) * DICE_RADIUS * offset,
-        (cy / len) * DICE_RADIUS * offset,
-        (cz / len) * DICE_RADIUS * offset,
-      );
-      // Orient plane to face outward along face normal
-      const normal = new THREE.Vector3(cx, cy, cz).normalize();
-      plane.lookAt(normal.multiplyScalar(DICE_RADIUS * 2));
-
-      this.mesh.add(plane);
-      this._faceLabels.push({ sprite: plane, texture, canvas });
-    }
-  }
-
-  _setFaceLabelsVisible(visible) {
-    this._faceLabels.forEach(({ sprite }) => {
-      sprite.visible = visible;
-    });
-  }
-
-  _disposeFaceLabels() {
-    this._faceLabels.forEach(({ sprite, texture }) => {
-      this.mesh.remove(sprite);
-      sprite.material.dispose();
-      texture.dispose();
-    });
-    this._faceLabels = [];
-  }
-
   _createRollingSprite() {
     this._rollingTexture = new THREE.CanvasTexture(this._canvas);
-    this.rollingSprite = this._createSprite(this._rollingTexture, 2.5);
+    const mat = new THREE.SpriteMaterial({ map: this._rollingTexture, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(2.5, 2.5, 1);
+    sprite.position.copy(this.mesh.position);
+    sprite.position.z += SPRITE_Z_OFFSET;
+    this.scene.add(sprite);
+    this.rollingSprite = sprite;
   }
 
   _clearRollingSprite() {
@@ -327,7 +296,6 @@ export class Dice {
     this.targetScale = 1;
 
     this._clearRollingSprite();
-    this._setFaceLabelsVisible(true);
     this.setResult(this.result);
 
     if (this.rollResolve) {
