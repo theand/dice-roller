@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Dice Tests</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    }
+  }
+  </script>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #fff; }
+    .pass { color: #4caf50; }
+    .fail { color: #f44336; }
+    #results { white-space: pre-line; }
+  </style>
+</head>
+<body>
+  <h2>Dice Tests</h2>
+  <div id="results"></div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { Dice } from '../js/dice.js';
+
+    const results = document.getElementById('results');
+    let passed = 0;
+    let failed = 0;
+
+    function assert(condition, name) {
+      if (condition) {
+        results.innerHTML += `<span class="pass">${'\u2713'} ${name}</span>\n`;
+        passed++;
+      } else {
+        results.innerHTML += `<span class="fail">${'\u2717'} ${name}</span>\n`;
+        failed++;
+      }
+    }
+
+    // Setup
+    const scene = new THREE.Scene();
+
+    // Test: Dice 생성
+    const dice = new Dice(scene, new THREE.Vector3(0, 0, 0));
+    assert(dice.mesh instanceof THREE.Mesh, 'Dice.mesh is a THREE.Mesh');
+    assert(dice.mesh.geometry instanceof THREE.IcosahedronGeometry, 'Geometry is IcosahedronGeometry');
+    assert(scene.children.includes(dice.mesh), 'Mesh added to scene');
+
+    // Helper: drive update() until roll resolves
+    function completeRoll(dice) {
+      return new Promise((resolve) => {
+        const promise = dice.roll();
+        const interval = setInterval(() => {
+          dice.update(0.1); // simulate 100ms steps
+          if (!dice.rolling) {
+            clearInterval(interval);
+            promise.then(resolve);
+          }
+        }, 0);
+      });
+    }
+
+    // Test: 결과 범위
+    const rollResults = [];
+    for (let i = 0; i < 20; i++) {
+      const r = await completeRoll(dice);
+      rollResults.push(r);
+    }
+    const allInRange = rollResults.every(r => r >= 10 && r <= 60 && Number.isInteger(r));
+    assert(allInRange, 'All roll results are integers in [10, 60]');
+
+    const uniqueValues = new Set(rollResults);
+    assert(uniqueValues.size > 1, 'Roll produces varied results');
+
+    // Test: dispose
+    dice.dispose();
+    assert(!scene.children.includes(dice.mesh), 'Mesh removed from scene after dispose');
+
+    // Summary
+    results.innerHTML += `\n--- ${passed} passed, ${failed} failed ---\n`;
+  </script>
+</body>
+</html>
