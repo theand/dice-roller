@@ -1,5 +1,25 @@
 import * as THREE from 'three';
 
+const DICE_MIN = 10;
+const DICE_RANGE = 51; // 10..60 inclusive
+const SPRITE_Z_OFFSET = 1.3;
+const CANVAS_SIZE = 256;
+const CANVAS_CENTER = CANVAS_SIZE / 2;
+const SCALE_THRESHOLD = 0.001;
+
+const FACE_COLORS = [
+  new THREE.Color(0x667eea), // indigo
+  new THREE.Color(0x764ba2), // purple
+  new THREE.Color(0x11998e), // teal
+  new THREE.Color(0xe94560), // pink
+  new THREE.Color(0xf7971e), // orange
+  new THREE.Color(0x56ccf2), // sky blue
+  new THREE.Color(0xa8e063), // lime
+  new THREE.Color(0xfc5c7d), // rose
+  new THREE.Color(0x6a3093), // deep purple
+  new THREE.Color(0x00b4db), // cyan
+];
+
 export class Dice {
   constructor(scene, position) {
     this.scene = scene;
@@ -7,38 +27,9 @@ export class Dice {
     this.result = null;
     this.basePosition = position.clone();
 
-    // Geometry: low detail so facets are clearly visible during rotation
     const geometry = new THREE.IcosahedronGeometry(1, 1);
+    this._applyFaceColors(geometry);
 
-    // Per-face colors: cosmic rainbow palette
-    const faceColors = [
-      new THREE.Color(0x667eea), // indigo
-      new THREE.Color(0x764ba2), // purple
-      new THREE.Color(0x11998e), // teal
-      new THREE.Color(0xe94560), // pink
-      new THREE.Color(0xf7971e), // orange
-      new THREE.Color(0x56ccf2), // sky blue
-      new THREE.Color(0xa8e063), // lime
-      new THREE.Color(0xfc5c7d), // rose
-      new THREE.Color(0x6a3093), // deep purple
-      new THREE.Color(0x00b4db), // cyan
-    ];
-
-    const posAttr = geometry.getAttribute('position');
-    const count = posAttr.count;
-    const colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i += 3) {
-      const faceIndex = Math.floor(i / 3);
-      const color = faceColors[faceIndex % faceColors.length];
-      for (let v = 0; v < 3; v++) {
-        colors[(i + v) * 3] = color.r;
-        colors[(i + v) * 3 + 1] = color.g;
-        colors[(i + v) * 3 + 2] = color.b;
-      }
-    }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    // Material: vertex colors + glow
     this.material = new THREE.MeshPhysicalMaterial({
       vertexColors: true,
       metalness: 0.3,
@@ -51,28 +42,26 @@ export class Dice {
     this.mesh.position.copy(position);
     this.scene.add(this.mesh);
 
-    // Roll animation state
     this.angularVelocity = new THREE.Vector3();
     this.rollDuration = 0;
     this.rollElapsed = 0;
     this.rollResolve = null;
 
-    // Bounce animation state
     this.bounceHeight = 0;
     this.bounceSpeed = 0;
 
-    // Rolling number sprite (slot machine effect)
-    this.rollingSprite = null;
-    this._rollingCanvas = document.createElement('canvas');
-    this._rollingCanvas.width = 256;
-    this._rollingCanvas.height = 256;
-    this._rollingCtx = this._rollingCanvas.getContext('2d');
-    this._rollingTexture = null;
+    // Shared canvas for both rolling numbers and result display
+    this._canvas = document.createElement('canvas');
+    this._canvas.width = CANVAS_SIZE;
+    this._canvas.height = CANVAS_SIZE;
+    this._ctx = this._canvas.getContext('2d');
 
-    // Result texture
+    this.rollingSprite = null;
+    this._rollingTexture = null;
+    this._lastRollingFrame = -1;
+
     this.resultSprite = null;
 
-    // Scale animation
     this.targetScale = 1;
     this.currentScale = 1;
   }
@@ -84,23 +73,19 @@ export class Dice {
     this._clearRollingSprite();
 
     this.rolling = true;
-    this.rollDuration = 2.0 + Math.random() * 0.5; // 2~2.5s
+    this.rollDuration = 2.0 + Math.random() * 0.5;
     this.rollElapsed = 0;
+    this._lastRollingFrame = -1;
 
-    // Random rotation axis and speed (faster!)
     this.angularVelocity.set(
       (Math.random() - 0.5) * 40,
       (Math.random() - 0.5) * 40,
       (Math.random() - 0.5) * 40,
     );
 
-    // Initial bounce upward
     this.bounceSpeed = 4 + Math.random() * 2;
-
-    // Shrink dice slightly during roll for punch effect
     this.targetScale = 0.85;
 
-    // Create rolling number sprite
     this._createRollingSprite();
 
     return new Promise((resolve) => {
@@ -109,29 +94,27 @@ export class Dice {
   }
 
   update(deltaTime) {
-    // Smooth scale transition
-    this.currentScale += (this.targetScale - this.currentScale) * 0.1;
-    this.mesh.scale.setScalar(this.currentScale);
+    const scaleDiff = this.targetScale - this.currentScale;
+    if (Math.abs(scaleDiff) > SCALE_THRESHOLD) {
+      this.currentScale += scaleDiff * 0.1;
+      this.mesh.scale.setScalar(this.currentScale);
+    }
 
     if (!this.rolling) return;
 
     this.rollElapsed += deltaTime;
     const progress = Math.min(this.rollElapsed / this.rollDuration, 1);
-
-    // Ease-out: slow down over time
     const easeFactor = 1 - progress * progress;
 
-    // Rotation (clearly visible on low-poly icosahedron)
     this.mesh.rotation.x += this.angularVelocity.x * easeFactor * deltaTime;
     this.mesh.rotation.y += this.angularVelocity.y * easeFactor * deltaTime;
     this.mesh.rotation.z += this.angularVelocity.z * easeFactor * deltaTime;
 
-    // Bounce: multiple bounces with decreasing height
-    this.bounceSpeed -= 15 * deltaTime; // gravity
+    // Bounce with decreasing energy
+    this.bounceSpeed -= 15 * deltaTime;
     this.bounceHeight += this.bounceSpeed * deltaTime;
     if (this.bounceHeight <= 0) {
       this.bounceHeight = 0;
-      // Bounce back up with less energy
       if (Math.abs(this.bounceSpeed) > 0.5) {
         this.bounceSpeed = -this.bounceSpeed * 0.5;
       } else {
@@ -140,78 +123,91 @@ export class Dice {
     }
     this.mesh.position.y = this.basePosition.y + this.bounceHeight;
 
-    // Update rolling number sprite (slot machine effect)
+    // Slot machine number cycling (frame-rate independent)
     if (this.rollingSprite) {
       this.rollingSprite.position.copy(this.mesh.position);
-      this.rollingSprite.position.z += 1.3;
+      this.rollingSprite.position.z += SPRITE_Z_OFFSET;
 
-      // Update number rapidly, slowing down as progress increases
+      const frame = Math.floor(this.rollElapsed * 30);
       const changeRate = Math.max(1, Math.floor((1 - progress) * 15));
-      if (Math.floor(this.rollElapsed * 30) % changeRate === 0) {
-        const tempNum = Math.floor(Math.random() * 51) + 10;
-        this._updateRollingNumber(tempNum, 1 - progress);
+      if (frame !== this._lastRollingFrame && frame % changeRate === 0) {
+        this._lastRollingFrame = frame;
+        const alpha = 0.3 + (1 - progress) * 0.5;
+        this._renderNumber(this._randomResult(), alpha);
+        this._rollingTexture.needsUpdate = true;
       }
     }
 
-    // Emissive pulse during roll
-    const pulse = 0.3 + Math.sin(this.rollElapsed * 10) * 0.2 * easeFactor;
-    this.material.emissiveIntensity = pulse;
+    this.material.emissiveIntensity = 0.3 + Math.sin(this.rollElapsed * 10) * 0.2 * easeFactor;
 
     if (progress >= 1) {
-      this.rolling = false;
-      this.result = Math.floor(Math.random() * 51) + 10;
-
-      // Reset position and emissive
-      this.mesh.position.y = this.basePosition.y;
-      this.bounceHeight = 0;
-      this.bounceSpeed = 0;
-      this.material.emissiveIntensity = 0.3;
-
-      // Pop scale effect for result reveal
-      this.currentScale = 1.3;
-      this.targetScale = 1;
-
-      // Clear rolling sprite and show final result
-      this._clearRollingSprite();
-      this.setResult(this.result);
-
-      if (this.rollResolve) {
-        this.rollResolve(this.result);
-        this.rollResolve = null;
-      }
+      this._finishRoll();
     }
   }
 
-  _createRollingSprite() {
-    this._rollingTexture = new THREE.CanvasTexture(this._rollingCanvas);
-    const mat = new THREE.SpriteMaterial({
-      map: this._rollingTexture,
-      transparent: true,
-    });
-    this.rollingSprite = new THREE.Sprite(mat);
-    this.rollingSprite.scale.set(1.5, 1.5, 1);
-    this.rollingSprite.position.copy(this.mesh.position);
-    this.rollingSprite.position.z += 1.3;
-    this.scene.add(this.rollingSprite);
+  setResult(number) {
+    this._clearResult();
+
+    this._renderNumber(number, 1.0, 120, 20);
+    const texture = new THREE.CanvasTexture(this._canvas);
+    this.resultSprite = this._createSprite(texture, 1.8);
   }
 
-  _updateRollingNumber(number, intensity) {
-    const ctx = this._rollingCtx;
-    ctx.clearRect(0, 0, 256, 256);
+  dispose() {
+    this._clearResult();
+    this._clearRollingSprite();
+    this.scene.remove(this.mesh);
+    this.mesh.geometry.dispose();
+    this.material.dispose();
+    this._canvas = null;
+    this._ctx = null;
+  }
 
-    // Faded number with varying opacity based on intensity
-    const alpha = 0.3 + intensity * 0.5;
+  // --- Private helpers ---
+
+  _randomResult() {
+    return Math.floor(Math.random() * DICE_RANGE) + DICE_MIN;
+  }
+
+  _renderNumber(number, alpha, fontSize = 100, shadowBlur = 15) {
+    const ctx = this._ctx;
+    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-    ctx.font = 'bold 100px sans-serif';
+    ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = `rgba(102, 126, 234, ${alpha})`;
-    ctx.shadowBlur = 15;
-    ctx.fillText(String(number), 128, 128);
+    ctx.shadowBlur = shadowBlur;
+    ctx.fillText(String(number), CANVAS_CENTER, CANVAS_CENTER);
+  }
 
-    if (this._rollingTexture) {
-      this._rollingTexture.needsUpdate = true;
+  _createSprite(texture, scale) {
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(scale, scale, 1);
+    sprite.position.copy(this.mesh.position);
+    sprite.position.z += SPRITE_Z_OFFSET;
+    this.scene.add(sprite);
+    return sprite;
+  }
+
+  _applyFaceColors(geometry) {
+    const count = geometry.getAttribute('position').count;
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 3) {
+      const color = FACE_COLORS[Math.floor(i / 3) % FACE_COLORS.length];
+      for (let v = 0; v < 3; v++) {
+        colors[(i + v) * 3] = color.r;
+        colors[(i + v) * 3 + 1] = color.g;
+        colors[(i + v) * 3 + 2] = color.b;
+      }
     }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  }
+
+  _createRollingSprite() {
+    this._rollingTexture = new THREE.CanvasTexture(this._canvas);
+    this.rollingSprite = this._createSprite(this._rollingTexture, 1.5);
   }
 
   _clearRollingSprite() {
@@ -226,35 +222,6 @@ export class Dice {
     }
   }
 
-  setResult(number) {
-    this._clearResult();
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-
-    ctx.clearRect(0, 0, 256, 256);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 120px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(102, 126, 234, 0.8)';
-    ctx.shadowBlur = 20;
-    ctx.fillText(String(number), 128, 128);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-    });
-    this.resultSprite = new THREE.Sprite(spriteMaterial);
-    this.resultSprite.scale.set(1.8, 1.8, 1);
-    this.resultSprite.position.copy(this.mesh.position);
-    this.resultSprite.position.z += 1.3;
-    this.scene.add(this.resultSprite);
-  }
-
   _clearResult() {
     if (this.resultSprite) {
       this.scene.remove(this.resultSprite);
@@ -264,11 +231,24 @@ export class Dice {
     }
   }
 
-  dispose() {
-    this._clearResult();
+  _finishRoll() {
+    this.rolling = false;
+    this.result = this._randomResult();
+
+    this.mesh.position.y = this.basePosition.y;
+    this.bounceHeight = 0;
+    this.bounceSpeed = 0;
+    this.material.emissiveIntensity = 0.3;
+
+    this.currentScale = 1.3;
+    this.targetScale = 1;
+
     this._clearRollingSprite();
-    this.scene.remove(this.mesh);
-    this.mesh.geometry.dispose();
-    this.material.dispose();
+    this.setResult(this.result);
+
+    if (this.rollResolve) {
+      this.rollResolve(this.result);
+      this.rollResolve = null;
+    }
   }
 }
