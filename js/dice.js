@@ -30,23 +30,20 @@ export class Dice {
     this.result = null;
     this.basePosition = position.clone();
 
-    // Each die gets a random color offset so they look different
     this._colorOffset = Math.floor(Math.random() * FACE_COLORS.length);
 
     const geometry = new THREE.IcosahedronGeometry(DICE_RADIUS, 0);
-    this._setupFaceGroups(geometry);
-    this.materials = this._createFaceMaterials(geometry);
+    const faceCount = geometry.getAttribute('position').count / 3;
+    this._setupFaceGroups(geometry, faceCount);
+    this.materials = this._createFaceMaterials(faceCount);
 
     this.mesh = new THREE.Mesh(geometry, this.materials);
     this.mesh.position.copy(position);
-
-    // Random initial rotation so each die shows different faces
     this.mesh.rotation.set(
       Math.random() * Math.PI * 2,
       Math.random() * Math.PI * 2,
       Math.random() * Math.PI * 2,
     );
-
     this.scene.add(this.mesh);
 
     this.angularVelocity = new THREE.Vector3();
@@ -66,6 +63,8 @@ export class Dice {
     this._rollingTexture = null;
     this._lastRollingFrame = -1;
 
+    // Persistent result sprite + texture (reused across rolls)
+    this._resultTexture = new THREE.CanvasTexture(this._canvas);
     this.resultSprite = null;
 
     this.targetScale = 1;
@@ -89,7 +88,6 @@ export class Dice {
       (Math.random() - 0.5) * 40,
     );
 
-    // Start high up, fall with gravity
     this.bounceHeight = DROP_HEIGHT;
     this.bounceSpeed = 0;
     this.mesh.position.y = this.basePosition.y + DROP_HEIGHT;
@@ -103,17 +101,26 @@ export class Dice {
   }
 
   update(deltaTime) {
-    const scaleDiff = this.targetScale - this.currentScale;
-    if (Math.abs(scaleDiff) > SCALE_THRESHOLD) {
-      this.currentScale += scaleDiff * 0.1;
-      this.mesh.scale.setScalar(this.currentScale);
+    if (!this.rolling) {
+      const scaleDiff = this.targetScale - this.currentScale;
+      if (Math.abs(scaleDiff) > SCALE_THRESHOLD) {
+        this.currentScale += scaleDiff * 0.1;
+        this.mesh.scale.setScalar(this.currentScale);
+      }
+      return;
     }
-
-    if (!this.rolling) return;
 
     this.rollElapsed += deltaTime;
     const progress = Math.min(this.rollElapsed / this.rollDuration, 1);
     const easeFactor = 1 - progress * progress * progress;
+
+    // Scale lerp + wobble combined
+    const scaleDiff = this.targetScale - this.currentScale;
+    if (Math.abs(scaleDiff) > SCALE_THRESHOLD) {
+      this.currentScale += scaleDiff * 0.1;
+    }
+    const wobble = 1 + Math.sin(this.rollElapsed * 12) * 0.03 * easeFactor;
+    this.mesh.scale.setScalar(this.currentScale * wobble);
 
     this.mesh.rotation.x += this.angularVelocity.x * easeFactor * deltaTime;
     this.mesh.rotation.y += this.angularVelocity.y * easeFactor * deltaTime;
@@ -145,9 +152,6 @@ export class Dice {
       }
     }
 
-    const wobble = 1 + Math.sin(this.rollElapsed * 12) * 0.03 * easeFactor;
-    this.mesh.scale.setScalar(this.currentScale * wobble);
-
     if (progress >= 1) {
       this._finishRoll();
     }
@@ -155,10 +159,9 @@ export class Dice {
 
   setResult(number) {
     this._clearResult();
-
     this._renderNumber(number, 1.0, 120, 20);
-    const texture = new THREE.CanvasTexture(this._canvas);
-    this.resultSprite = this._createResultSprite(texture, 3.2);
+    this._resultTexture = new THREE.CanvasTexture(this._canvas);
+    this.resultSprite = this._createSprite(this._resultTexture, 3.2);
   }
 
   dispose() {
@@ -167,29 +170,31 @@ export class Dice {
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
     this.materials.forEach(m => {
-      if (m.map) m.map.dispose();
+      if (m.map) {
+        m.map.image = null;
+        m.map.dispose();
+      }
       m.dispose();
     });
+    if (this._resultTexture) {
+      this._resultTexture.dispose();
+      this._resultTexture = null;
+    }
     this._canvas = null;
     this._ctx = null;
   }
 
   // --- Private: geometry setup ---
 
-  _setupFaceGroups(geometry) {
+  _setupFaceGroups(geometry, faceCount) {
     geometry.clearGroups();
-    const faceCount = geometry.getAttribute('position').count / 3;
-
-    // Assign each face to its own material group
     for (let i = 0; i < faceCount; i++) {
       geometry.addGroup(i * 3, 3, i);
     }
 
-    // Remap UVs so each face covers full [0,1] texture range
     const uvs = new Float32Array(faceCount * 3 * 2);
     for (let i = 0; i < faceCount; i++) {
       const base = i * 6;
-      // Triangle UV: top-center, bottom-left, bottom-right
       uvs[base] = 0.5; uvs[base + 1] = 1.0;
       uvs[base + 2] = 0.0; uvs[base + 3] = 0.0;
       uvs[base + 4] = 1.0; uvs[base + 5] = 0.0;
@@ -197,36 +202,35 @@ export class Dice {
     geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   }
 
-  _createFaceMaterials(geometry) {
-    const faceCount = geometry.getAttribute('position').count / 3;
+  _createFaceMaterials(faceCount) {
     const materials = [];
 
     for (let i = 0; i < faceCount; i++) {
       const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 256;
+      canvas.width = CANVAS_SIZE;
+      canvas.height = CANVAS_SIZE;
       const ctx = canvas.getContext('2d');
 
-      // Fill with face color
       ctx.fillStyle = FACE_COLORS[(i + this._colorOffset) % FACE_COLORS.length];
-      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-      // Subtle edge shading for depth
-      const grad = ctx.createRadialGradient(128, 100, 20, 128, 128, 140);
+      const grad = ctx.createRadialGradient(
+        CANVAS_CENTER, CANVAS_CENTER - 28, 20,
+        CANVAS_CENTER, CANVAS_CENTER, 140,
+      );
       grad.addColorStop(0, 'rgba(255,255,255,0.15)');
       grad.addColorStop(1, 'rgba(0,0,0,0.15)');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-      // White number centered in the triangle area
       const num = FACE_NUMBERS[i % FACE_NUMBERS.length];
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 100px sans-serif';
+      ctx.font = `bold 100px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
       ctx.shadowBlur = 6;
-      ctx.fillText(String(num), 128, 120);
+      ctx.fillText(String(num), CANVAS_CENTER, CANVAS_CENTER - 8);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -259,7 +263,7 @@ export class Dice {
     ctx.fillText(String(number), CANVAS_CENTER, CANVAS_CENTER);
   }
 
-  _createResultSprite(texture, scale) {
+  _createSprite(texture, scale) {
     const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(scale, scale, 1);
@@ -271,13 +275,7 @@ export class Dice {
 
   _createRollingSprite() {
     this._rollingTexture = new THREE.CanvasTexture(this._canvas);
-    const mat = new THREE.SpriteMaterial({ map: this._rollingTexture, transparent: true });
-    const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(2.5, 2.5, 1);
-    sprite.position.copy(this.mesh.position);
-    sprite.position.z += SPRITE_Z_OFFSET;
-    this.scene.add(sprite);
-    this.rollingSprite = sprite;
+    this.rollingSprite = this._createSprite(this._rollingTexture, 2.5);
   }
 
   _clearRollingSprite() {
