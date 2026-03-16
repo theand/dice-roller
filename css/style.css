@@ -1,0 +1,126 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: linear-gradient(135deg, #2d1b69, #11998e);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #fff;
+}
+
+#title {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  text-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+  z-index: 10;
+  pointer-events: none;
+}
+
+#dice-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#controls {
+  position: absolute;
+  bottom: 32px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 10;
+}
+
+#dice-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dice-label {
+  font-size: 12px;
+  opacity: 0.7;
+  letter-spacing: 2px;
+}
+
+.count-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.count-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.count-btn.active {
+  background: rgba(102, 126, 234, 0.6);
+  border-color: rgba(255, 255, 255, 0.4);
+  font-weight: bold;
+}
+
+#roll-btn {
+  padding: 14px 56px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  border-radius: 30px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.4);
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+
+#roll-btn:hover {
+  box-shadow: 0 6px 32px rgba(102, 126, 234, 0.6);
+  transform: translateY(-1px);
+}
+
+#roll-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+#webgl-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 100;
+  font-size: 18px;
+}
+
+@media (max-width: 480px) {
+  #title { font-size: 18px; top: 16px; }
+  #controls { bottom: 20px; gap: 12px; }
+  .count-btn { width: 32px; height: 32px; }
+  #roll-btn { padding: 12px 40px; font-size: 14px; }
+}

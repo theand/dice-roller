@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic Dice</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="title">COSMIC DICE</div>
+  <canvas id="dice-canvas"></canvas>
+  <div id="controls">
+    <div id="dice-count">
+      <span class="dice-label">DICE</span>
+      <button data-count="1" class="count-btn active">1</button>
+      <button data-count="2" class="count-btn">2</button>
+      <button data-count="3" class="count-btn">3</button>
+      <button data-count="4" class="count-btn">4</button>
+    </div>
+    <button id="roll-btn">ROLL</button>
+  </div>
+  <div id="webgl-error" hidden>
+    <p>WebGL을 지원하지 않는 브라우저입니다.</p>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
