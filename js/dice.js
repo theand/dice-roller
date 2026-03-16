@@ -2,22 +2,39 @@ import * as THREE from 'three';
 
 const DICE_MIN = 10;
 const DICE_RANGE = 51; // 10..60 inclusive
-const SPRITE_Z_OFFSET = 1.3;
+const DICE_RADIUS = 2;
+const SPRITE_Z_OFFSET = 2.6;
 const CANVAS_SIZE = 256;
 const CANVAS_CENTER = CANVAS_SIZE / 2;
 const SCALE_THRESHOLD = 0.001;
 
 const FACE_COLORS = [
+  new THREE.Color(0xff6b6b), // red
   new THREE.Color(0x667eea), // indigo
-  new THREE.Color(0x764ba2), // purple
+  new THREE.Color(0xfeca57), // yellow
   new THREE.Color(0x11998e), // teal
-  new THREE.Color(0xe94560), // pink
+  new THREE.Color(0xff9ff3), // pink
   new THREE.Color(0xf7971e), // orange
   new THREE.Color(0x56ccf2), // sky blue
   new THREE.Color(0xa8e063), // lime
+  new THREE.Color(0x764ba2), // purple
+  new THREE.Color(0x00b4db), // cyan
+  new THREE.Color(0xe94560), // crimson
+  new THREE.Color(0x1dd1a1), // mint
   new THREE.Color(0xfc5c7d), // rose
   new THREE.Color(0x6a3093), // deep purple
-  new THREE.Color(0x00b4db), // cyan
+  new THREE.Color(0xf0932b), // tangerine
+  new THREE.Color(0x48dbfb), // light blue
+  new THREE.Color(0xc7ecee), // ice
+  new THREE.Color(0xdfe6e9), // silver
+  new THREE.Color(0xfdcb6e), // gold
+  new THREE.Color(0x00cec9), // aqua
+];
+
+// Numbers to display on each face (decorative d20-style)
+const FACE_NUMBERS = [
+  10, 15, 20, 25, 30, 35, 40, 45, 50, 55,
+  60, 12, 18, 22, 28, 33, 38, 42, 48, 53,
 ];
 
 export class Dice {
@@ -27,20 +44,24 @@ export class Dice {
     this.result = null;
     this.basePosition = position.clone();
 
-    const geometry = new THREE.IcosahedronGeometry(1, 1);
+    const geometry = new THREE.IcosahedronGeometry(DICE_RADIUS, 0);
     this._applyFaceColors(geometry);
 
     this.material = new THREE.MeshPhysicalMaterial({
       vertexColors: true,
-      metalness: 0.3,
-      roughness: 0.35,
-      emissive: 0x2d1b69,
-      emissiveIntensity: 0.3,
+      metalness: 0.1,
+      roughness: 0.4,
+      emissive: 0x000000,
+      emissiveIntensity: 0,
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.mesh.position.copy(position);
     this.scene.add(this.mesh);
+
+    // Face number labels
+    this._faceLabels = [];
+    this._createFaceLabels(geometry);
 
     this.angularVelocity = new THREE.Vector3();
     this.rollDuration = 0;
@@ -50,7 +71,6 @@ export class Dice {
     this.bounceHeight = 0;
     this.bounceSpeed = 0;
 
-    // Shared canvas for both rolling numbers and result display
     this._canvas = document.createElement('canvas');
     this._canvas.width = CANVAS_SIZE;
     this._canvas.height = CANVAS_SIZE;
@@ -86,6 +106,7 @@ export class Dice {
     this.bounceSpeed = 4 + Math.random() * 2;
     this.targetScale = 0.85;
 
+    this._setFaceLabelsVisible(false);
     this._createRollingSprite();
 
     return new Promise((resolve) => {
@@ -110,7 +131,6 @@ export class Dice {
     this.mesh.rotation.y += this.angularVelocity.y * easeFactor * deltaTime;
     this.mesh.rotation.z += this.angularVelocity.z * easeFactor * deltaTime;
 
-    // Bounce with decreasing energy
     this.bounceSpeed -= 15 * deltaTime;
     this.bounceHeight += this.bounceSpeed * deltaTime;
     if (this.bounceHeight <= 0) {
@@ -123,7 +143,6 @@ export class Dice {
     }
     this.mesh.position.y = this.basePosition.y + this.bounceHeight;
 
-    // Slot machine number cycling (frame-rate independent)
     if (this.rollingSprite) {
       this.rollingSprite.position.copy(this.mesh.position);
       this.rollingSprite.position.z += SPRITE_Z_OFFSET;
@@ -138,7 +157,9 @@ export class Dice {
       }
     }
 
-    this.material.emissiveIntensity = 0.3 + Math.sin(this.rollElapsed * 10) * 0.2 * easeFactor;
+    // Scale pulse during roll for visual feedback
+    const wobble = 1 + Math.sin(this.rollElapsed * 12) * 0.03 * easeFactor;
+    this.mesh.scale.setScalar(this.currentScale * wobble);
 
     if (progress >= 1) {
       this._finishRoll();
@@ -150,12 +171,13 @@ export class Dice {
 
     this._renderNumber(number, 1.0, 120, 20);
     const texture = new THREE.CanvasTexture(this._canvas);
-    this.resultSprite = this._createSprite(texture, 1.8);
+    this.resultSprite = this._createSprite(texture, 3.2);
   }
 
   dispose() {
     this._clearResult();
     this._clearRollingSprite();
+    this._disposeFaceLabels();
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
     this.material.dispose();
@@ -205,9 +227,71 @@ export class Dice {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   }
 
+  _createFaceLabels(geometry) {
+    const positions = geometry.getAttribute('position');
+    const faceCount = positions.count / 3;
+
+    for (let i = 0; i < faceCount; i++) {
+      const i0 = i * 3, i1 = i * 3 + 1, i2 = i * 3 + 2;
+      const cx = (positions.getX(i0) + positions.getX(i1) + positions.getX(i2)) / 3;
+      const cy = (positions.getY(i0) + positions.getY(i1) + positions.getY(i2)) / 3;
+      const cz = (positions.getZ(i0) + positions.getZ(i1) + positions.getZ(i2)) / 3;
+
+      const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
+      const offset = 1.02;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 64px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 3;
+      ctx.fillText(String(FACE_NUMBERS[i % FACE_NUMBERS.length]), 64, 64);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      plane.position.set(
+        (cx / len) * DICE_RADIUS * offset,
+        (cy / len) * DICE_RADIUS * offset,
+        (cz / len) * DICE_RADIUS * offset,
+      );
+      // Orient plane to face outward along face normal
+      const normal = new THREE.Vector3(cx, cy, cz).normalize();
+      plane.lookAt(normal.multiplyScalar(DICE_RADIUS * 2));
+
+      this.mesh.add(plane);
+      this._faceLabels.push({ sprite: plane, texture, canvas });
+    }
+  }
+
+  _setFaceLabelsVisible(visible) {
+    this._faceLabels.forEach(({ sprite }) => {
+      sprite.visible = visible;
+    });
+  }
+
+  _disposeFaceLabels() {
+    this._faceLabels.forEach(({ sprite, texture }) => {
+      this.mesh.remove(sprite);
+      sprite.material.dispose();
+      texture.dispose();
+    });
+    this._faceLabels = [];
+  }
+
   _createRollingSprite() {
     this._rollingTexture = new THREE.CanvasTexture(this._canvas);
-    this.rollingSprite = this._createSprite(this._rollingTexture, 1.5);
+    this.rollingSprite = this._createSprite(this._rollingTexture, 2.5);
   }
 
   _clearRollingSprite() {
@@ -238,12 +322,12 @@ export class Dice {
     this.mesh.position.y = this.basePosition.y;
     this.bounceHeight = 0;
     this.bounceSpeed = 0;
-    this.material.emissiveIntensity = 0.3;
 
     this.currentScale = 1.3;
     this.targetScale = 1;
 
     this._clearRollingSprite();
+    this._setFaceLabelsVisible(true);
     this.setResult(this.result);
 
     if (this.rollResolve) {

@@ -19,26 +19,26 @@ const scene = new THREE.Scene();
 
 // --- Camera ---
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 0, 10);
+camera.position.set(0, 0, 18);
 
 // --- Lighting ---
-const ambientLight = new THREE.AmbientLight(0x8866aa, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambientLight);
 
-const pointLight1 = new THREE.PointLight(0x667eea, 1.5, 50);
-pointLight1.position.set(-5, 5, 5);
+const pointLight1 = new THREE.PointLight(0xffffff, 1.5, 80);
+pointLight1.position.set(-8, 8, 10);
 scene.add(pointLight1);
 
-const pointLight2 = new THREE.PointLight(0x11998e, 1.2, 50);
-pointLight2.position.set(5, -3, 5);
+const pointLight2 = new THREE.PointLight(0xffffff, 1.0, 80);
+pointLight2.position.set(8, -4, 10);
 scene.add(pointLight2);
 
 // --- Dice Management ---
 const POSITIONS = {
   1: [new THREE.Vector3(0, 0, 0)],
-  2: [new THREE.Vector3(-1.5, 0, 0), new THREE.Vector3(1.5, 0, 0)],
-  3: [new THREE.Vector3(-3, 0, 0), new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)],
-  4: [new THREE.Vector3(-4.5, 0, 0), new THREE.Vector3(-1.5, 0, 0), new THREE.Vector3(1.5, 0, 0), new THREE.Vector3(4.5, 0, 0)],
+  2: [new THREE.Vector3(-3, 0, 0), new THREE.Vector3(3, 0, 0)],
+  3: [new THREE.Vector3(-5.5, 0, 0), new THREE.Vector3(0, 0, 0), new THREE.Vector3(5.5, 0, 0)],
+  4: [new THREE.Vector3(-8, 0, 0), new THREE.Vector3(-2.7, 0, 0), new THREE.Vector3(2.7, 0, 0), new THREE.Vector3(8, 0, 0)],
 };
 
 let diceArray = [];
