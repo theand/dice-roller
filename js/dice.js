@@ -30,12 +30,23 @@ export class Dice {
     this.result = null;
     this.basePosition = position.clone();
 
+    // Each die gets a random color offset so they look different
+    this._colorOffset = Math.floor(Math.random() * FACE_COLORS.length);
+
     const geometry = new THREE.IcosahedronGeometry(DICE_RADIUS, 0);
     this._setupFaceGroups(geometry);
     this.materials = this._createFaceMaterials(geometry);
 
     this.mesh = new THREE.Mesh(geometry, this.materials);
     this.mesh.position.copy(position);
+
+    // Random initial rotation so each die shows different faces
+    this.mesh.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+
     this.scene.add(this.mesh);
 
     this.angularVelocity = new THREE.Vector3();
@@ -197,7 +208,7 @@ export class Dice {
       const ctx = canvas.getContext('2d');
 
       // Fill with face color
-      ctx.fillStyle = FACE_COLORS[i % FACE_COLORS.length];
+      ctx.fillStyle = FACE_COLORS[(i + this._colorOffset) % FACE_COLORS.length];
       ctx.fillRect(0, 0, 256, 256);
 
       // Subtle edge shading for depth
