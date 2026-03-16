@@ -7,9 +7,9 @@ const SPRITE_Z_OFFSET = 2.6;
 const CANVAS_SIZE = 256;
 const CANVAS_CENTER = CANVAS_SIZE / 2;
 const SCALE_THRESHOLD = 0.001;
-const DROP_HEIGHT = 12;
-const GRAVITY = 35;
-const RESTITUTION = 0.55;
+const DROP_HEIGHT = 14;
+const GRAVITY = 22;
+const RESTITUTION = 0.6;
 
 const FACE_COLORS = [
   '#ff6b6b', '#667eea', '#feca57', '#11998e', '#ff9ff3',
@@ -68,7 +68,7 @@ export class Dice {
     this._clearRollingSprite();
 
     this.rolling = true;
-    this.rollDuration = 2.0 + Math.random() * 0.5;
+    this.rollDuration = 3.0 + Math.random() * 0.5;
     this.rollElapsed = 0;
     this._lastRollingFrame = -1;
 
@@ -102,7 +102,7 @@ export class Dice {
 
     this.rollElapsed += deltaTime;
     const progress = Math.min(this.rollElapsed / this.rollDuration, 1);
-    const easeFactor = 1 - progress * progress;
+    const easeFactor = 1 - progress * progress * progress;
 
     this.mesh.rotation.x += this.angularVelocity.x * easeFactor * deltaTime;
     this.mesh.rotation.y += this.angularVelocity.y * easeFactor * deltaTime;
@@ -112,7 +112,7 @@ export class Dice {
     this.bounceHeight += this.bounceSpeed * deltaTime;
     if (this.bounceHeight <= 0) {
       this.bounceHeight = 0;
-      if (Math.abs(this.bounceSpeed) > 1.0) {
+      if (Math.abs(this.bounceSpeed) > 0.3) {
         this.bounceSpeed = -this.bounceSpeed * RESTITUTION;
       } else {
         this.bounceSpeed = 0;
