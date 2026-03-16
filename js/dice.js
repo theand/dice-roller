@@ -7,6 +7,9 @@ const SPRITE_Z_OFFSET = 2.6;
 const CANVAS_SIZE = 256;
 const CANVAS_CENTER = CANVAS_SIZE / 2;
 const SCALE_THRESHOLD = 0.001;
+const DROP_HEIGHT = 12;
+const GRAVITY = 35;
+const RESTITUTION = 0.55;
 
 const FACE_COLORS = [
   '#ff6b6b', '#667eea', '#feca57', '#11998e', '#ff9ff3',
@@ -75,8 +78,11 @@ export class Dice {
       (Math.random() - 0.5) * 40,
     );
 
-    this.bounceSpeed = 4 + Math.random() * 2;
-    this.targetScale = 0.85;
+    // Start high up, fall with gravity
+    this.bounceHeight = DROP_HEIGHT;
+    this.bounceSpeed = 0;
+    this.mesh.position.y = this.basePosition.y + DROP_HEIGHT;
+    this.targetScale = 0.9;
 
     this._createRollingSprite();
 
@@ -102,12 +108,12 @@ export class Dice {
     this.mesh.rotation.y += this.angularVelocity.y * easeFactor * deltaTime;
     this.mesh.rotation.z += this.angularVelocity.z * easeFactor * deltaTime;
 
-    this.bounceSpeed -= 15 * deltaTime;
+    this.bounceSpeed -= GRAVITY * deltaTime;
     this.bounceHeight += this.bounceSpeed * deltaTime;
     if (this.bounceHeight <= 0) {
       this.bounceHeight = 0;
-      if (Math.abs(this.bounceSpeed) > 0.5) {
-        this.bounceSpeed = -this.bounceSpeed * 0.5;
+      if (Math.abs(this.bounceSpeed) > 1.0) {
+        this.bounceSpeed = -this.bounceSpeed * RESTITUTION;
       } else {
         this.bounceSpeed = 0;
       }
