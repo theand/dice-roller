@@ -92,9 +92,9 @@ class Dice {
   <div id="controls">
     <div id="dice-count">
       <span>DICE</span>
-      <button data-count="1">1</button>
+      <button data-count="1" class="active">1</button>
       <button data-count="2">2</button>
-      <button data-count="3" class="active">3</button>
+      <button data-count="3">3</button>
       <button data-count="4">4</button>
     </div>
     <button id="roll-btn">ROLL</button>
