@@ -12,12 +12,19 @@
   <div id="controls">
     <div id="dice-count">
       <span class="dice-label">DICE</span>
-      <button data-count="1" class="count-btn active">1</button>
-      <button data-count="2" class="count-btn">2</button>
-      <button data-count="3" class="count-btn">3</button>
-      <button data-count="4" class="count-btn">4</button>
+      <button type="button" data-count="1" class="count-btn active">1</button>
+      <button type="button" data-count="2" class="count-btn">2</button>
+      <button type="button" data-count="3" class="count-btn">3</button>
+      <button type="button" data-count="4" class="count-btn">4</button>
     </div>
-    <button id="roll-btn">ROLL</button>
+    <div id="dice-sides">
+      <span class="dice-label">SIDES</span>
+      <button type="button" data-sides="6" class="sides-btn">D6</button>
+      <button type="button" data-sides="8" class="sides-btn">D8</button>
+      <button type="button" data-sides="12" class="sides-btn">D12</button>
+      <button type="button" data-sides="20" class="sides-btn active">D20</button>
+    </div>
+    <button type="button" id="roll-btn">ROLL</button>
   </div>
   <div id="webgl-error" hidden>
     <p>WebGL을 지원하지 않는 브라우저입니다.</p>

@@ -47,7 +47,8 @@ body {
   z-index: 10;
 }
 
-#dice-count {
+#dice-count,
+#dice-sides {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -59,9 +60,11 @@ body {
   letter-spacing: 2px;
 }
 
-.count-btn {
-  width: 36px;
+.count-btn,
+.sides-btn {
+  min-width: 36px;
   height: 36px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
@@ -71,11 +74,13 @@ body {
   transition: all 0.2s;
 }
 
-.count-btn:hover {
+.count-btn:hover,
+.sides-btn:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.count-btn.active {
+.count-btn.active,
+.sides-btn.active {
   background: rgba(102, 126, 234, 0.6);
   border-color: rgba(255, 255, 255, 0.4);
   font-weight: bold;
@@ -125,6 +130,7 @@ body {
 @media (max-width: 480px) {
   #title { font-size: 18px; top: 16px; }
   #controls { bottom: 20px; gap: 12px; }
-  .count-btn { width: 32px; height: 32px; }
+  .count-btn,
+  .sides-btn { min-width: 32px; height: 32px; padding: 0 8px; }
   #roll-btn { padding: 12px 40px; font-size: 14px; }
 }

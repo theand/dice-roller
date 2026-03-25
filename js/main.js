@@ -43,19 +43,31 @@ const POSITIONS = {
 
 let diceArray = [];
 let diceCount = 1;
+let diceSides = 20;
 let isRolling = false;
 
-function setDiceCount(count) {
+function rebuildDice() {
   // Remove existing dice
-  diceArray.forEach(d => d.dispose());
+  diceArray.forEach((d) => {
+    d.dispose();
+  });
   diceArray = [];
 
   // Create new dice at correct positions
-  const positions = POSITIONS[count];
+  const positions = POSITIONS[diceCount];
   positions.forEach(pos => {
-    diceArray.push(new Dice(scene, pos));
+    diceArray.push(new Dice(scene, pos, diceSides));
   });
+}
+
+function setDiceCount(count) {
   diceCount = count;
+  rebuildDice();
+}
+
+function setDiceSides(sides) {
+  diceSides = sides;
+  rebuildDice();
 }
 
 // Initialize with 1 die
@@ -66,10 +78,29 @@ const countButtons = document.querySelectorAll('.count-btn');
 countButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     if (isRolling) return;
-    const count = parseInt(btn.dataset.count);
-    countButtons.forEach(b => b.classList.remove('active'));
+    const count = Number.parseInt(btn.dataset.count, 10);
+    if (Number.isNaN(count) || count === diceCount) return;
+
+    countButtons.forEach((b) => {
+      b.classList.remove('active');
+    });
     btn.classList.add('active');
     setDiceCount(count);
+  });
+});
+
+const sidesButtons = document.querySelectorAll('.sides-btn');
+sidesButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (isRolling) return;
+    const sides = Number.parseInt(btn.dataset.sides, 10);
+    if (Number.isNaN(sides) || sides === diceSides) return;
+
+    sidesButtons.forEach((b) => {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    setDiceSides(sides);
   });
 });
 
@@ -94,7 +125,9 @@ function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
 
-  diceArray.forEach(d => d.update(delta));
+  diceArray.forEach((d) => {
+    d.update(delta);
+  });
 
   renderer.render(scene, camera);
 }
