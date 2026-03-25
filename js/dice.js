@@ -113,8 +113,7 @@ export class Dice {
     this._canvas.height = CANVAS_SIZE;
     this._ctx = this._canvas.getContext('2d');
 
-    // Persistent result sprite + texture (reused across rolls)
-    this._resultTexture = new THREE.CanvasTexture(this._canvas);
+    this._resultTexture = null;
     this.resultSprite = null;
 
     this.targetScale = 1;
@@ -174,6 +173,9 @@ export class Dice {
 
   setResult(number) {
     this._clearResult();
+    if (this._resultTexture) {
+      this._resultTexture.dispose();
+    }
     this._renderNumber(number, 1.0, 120, 20);
     this._resultTexture = new THREE.CanvasTexture(this._canvas);
     this.resultSprite = this._createSprite(this._resultTexture, 3.2);
