@@ -116,6 +116,11 @@ export class Dice {
     this._resultTexture = null;
     this.resultSprite = null;
 
+    // Scratch objects reused per-frame to avoid GC pressure
+    this._scratchNormal = new THREE.Vector3();
+    this._scratchQuat = new THREE.Quaternion();
+    this._scratchQuat2 = new THREE.Quaternion();
+
     this.targetScale = 1;
     this.currentScale = 1;
   }
@@ -326,7 +331,7 @@ export class Dice {
       triangleToFaceIndices.push(faceIndex);
     }
 
-    this._faceData = faceData.map((face, index) => ({
+    const processedFaceData = faceData.map((face, index) => ({
       index,
       value: index + 1,
       normal: face.normal.clone().normalize(),
@@ -334,7 +339,7 @@ export class Dice {
     }));
 
     return {
-      faceData: this._faceData,
+      faceData: processedFaceData,
       triangleToFaceIndices,
     };
   }
@@ -364,9 +369,13 @@ export class Dice {
 
   _createFaceLabels() {
     const labelSize = FACE_LABEL_SIZE_BY_SIDES[this.sides] ?? 1;
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = CANVAS_SIZE;
+    labelCanvas.height = CANVAS_SIZE;
+    const labelCtx = labelCanvas.getContext('2d');
 
     this._faceData.forEach((face) => {
-      const labelTexture = this._createFaceLabelTexture(face.value);
+      const labelTexture = this._createFaceLabelTexture(face.value, labelCtx, labelCanvas);
       const labelMaterial = new THREE.MeshBasicMaterial({
         map: labelTexture,
         transparent: true,
@@ -381,12 +390,7 @@ export class Dice {
     });
   }
 
-  _createFaceLabelTexture(value) {
-    const canvas = document.createElement('canvas');
-    canvas.width = CANVAS_SIZE;
-    canvas.height = CANVAS_SIZE;
-    const ctx = canvas.getContext('2d');
-
+  _createFaceLabelTexture(value, ctx, canvas) {
     ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.font = 'bold 140px sans-serif';
     ctx.textAlign = 'center';
@@ -509,64 +513,48 @@ export class Dice {
     }
   }
 
-  _getBottomFaceIndex() {
-    let bestFaceIndex = 0;
+  _findBestFace(axis) {
+    let bestIndex = 0;
     let bestDot = Number.NEGATIVE_INFINITY;
 
     for (let i = 0; i < this._faceData.length; i++) {
-      const worldNormal = this._faceData[i].normal.clone().applyQuaternion(this.mesh.quaternion).normalize();
-      const dot = worldNormal.dot(DOWN_AXIS);
+      const worldNormal = this._scratchNormal
+        .copy(this._faceData[i].normal)
+        .applyQuaternion(this.mesh.quaternion)
+        .normalize();
+      const dot = worldNormal.dot(axis);
       if (dot > bestDot) {
         bestDot = dot;
-        bestFaceIndex = i;
+        bestIndex = i;
       }
     }
 
-    return bestFaceIndex;
+    return { index: bestIndex, dot: bestDot };
+  }
+
+  _getBottomFaceIndex() {
+    return this._findBestFace(DOWN_AXIS).index;
   }
 
   _getBottomFaceAlignment() {
-    let bestDot = Number.NEGATIVE_INFINITY;
-
-    for (let i = 0; i < this._faceData.length; i++) {
-      const worldNormal = this._faceData[i].normal.clone().applyQuaternion(this.mesh.quaternion).normalize();
-      const dot = worldNormal.dot(DOWN_AXIS);
-      if (dot > bestDot) {
-        bestDot = dot;
-      }
-    }
-
-    return bestDot;
+    return this._findBestFace(DOWN_AXIS).dot;
   }
 
   _getTopFaceIndex() {
-    let bestFaceIndex = 0;
-    let bestDot = Number.NEGATIVE_INFINITY;
-
-    for (let i = 0; i < this._faceData.length; i++) {
-      const worldNormal = this._faceData[i].normal.clone().applyQuaternion(this.mesh.quaternion).normalize();
-      const dot = worldNormal.dot(UP_AXIS);
-      if (dot > bestDot) {
-        bestDot = dot;
-        bestFaceIndex = i;
-      }
-    }
-
-    return bestFaceIndex;
+    return this._findBestFace(UP_AXIS).index;
   }
 
   _computeSettledQuaternion(faceIndex) {
-    if (!this._faceData || this._faceData.length === 0) {
-      return this.mesh.quaternion.clone();
-    }
+    const faceNormalWorld = this._scratchNormal
+      .copy(this._faceData[faceIndex].normal)
+      .applyQuaternion(this.mesh.quaternion)
+      .normalize();
 
-    const normalizedFaceIndex = Math.min(Math.max(faceIndex, 0), this._faceData.length - 1);
-    const faceNormalWorld = this._faceData[normalizedFaceIndex].normal.clone().applyQuaternion(this.mesh.quaternion).normalize();
-
-    const alignToGround = new THREE.Quaternion().setFromUnitVectors(faceNormalWorld, DOWN_AXIS);
-    const settledQuaternion = alignToGround.multiply(this.mesh.quaternion.clone());
-    settledQuaternion.normalize();
-    return settledQuaternion;
+    const alignToGround = this._scratchQuat.setFromUnitVectors(faceNormalWorld, DOWN_AXIS);
+    const settledQuaternion = this._scratchQuat2.copy(this.mesh.quaternion);
+    alignToGround.multiply(settledQuaternion);
+    alignToGround.normalize();
+    return alignToGround;
   }
 
   _resolveRoll() {

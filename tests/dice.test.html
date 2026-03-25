@@ -57,23 +57,23 @@
     function completeRoll(dice) {
       return new Promise((resolve) => {
         const promise = dice.roll();
-          const interval = setInterval(() => {
-            dice.update(0.1); // simulate 100ms steps
-            if (!dice.rolling && !dice.settling) {
-              clearInterval(interval);
-              promise.then(resolve);
-            }
-          }, 0);
-        });
-      }
+        const interval = setInterval(() => {
+          dice.update(0.1);
+          if (!dice.rolling && !dice.settling) {
+            clearInterval(interval);
+            promise.then(resolve);
+          }
+        }, 0);
+      });
+    }
 
-      function hasFlatContact(dice) {
-        const down = new THREE.Vector3(0, -1, 0);
-        return dice._faceData.some((face) => {
-          const worldNormal = face.normal.clone().applyQuaternion(dice.mesh.quaternion);
-          return worldNormal.dot(down) > 0.999;
-        });
-      }
+    function hasFlatContact(dice) {
+      const down = new THREE.Vector3(0, -1, 0);
+      return dice._faceData.some((face) => {
+        const worldNormal = face.normal.clone().applyQuaternion(dice.mesh.quaternion);
+        return worldNormal.dot(down) > 0.999;
+      });
+    }
 
     // Test: 결과 범위
     const d20Results = [];
