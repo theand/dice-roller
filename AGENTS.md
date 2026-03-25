@@ -1,5 +1,3 @@
-<!-- Generated: 2026-03-25 | Updated: 2026-03-25 -->
-
 # Cosmic Dice Roller
 
 ## Purpose
@@ -40,7 +38,6 @@ npx serve -l 3460 .
 - 결과는 브라우저 내 pass/fail 텍스트로 확인
 
 ### Common Patterns
-- CSS `display: flex`가 HTML `hidden` 속성을 덮어쓰므로 `:not([hidden])` 셀렉터 사용
 - Dice 클래스는 면당 개별 material group 사용 (면 수만큼 머터리얼 배열)
 
 ### Code Conventions

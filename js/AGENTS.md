@@ -1,5 +1,4 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-03-25 | Updated: 2026-03-25 -->
 
 # js
 
@@ -24,7 +23,7 @@
 
 ### Testing Requirements
 - `tests/dice.test.html`에서 Dice 생성, 결과 범위, 면 접촉, dispose 검증
-- 변경 후 반드시 로컬 서버에서 테스트 실행
+- 변경 후 반드시 `http://localhost:3460/tests/dice.test.html` 에서 테스트 실행
 
 ### Common Patterns
 - 면당 개별 material group: `geometry.addGroup(start, count, materialIndex)` 사용
